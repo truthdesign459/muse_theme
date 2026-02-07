@@ -1,0 +1,21 @@
+html {
+    scroll-behavior: smooth;
+}
+#toc {
+    padding: 1.5em;
+    margin-bottom: 1em;
+    border: 1px solid #ccc;
+}
+#toc ol {
+    list-style: none;
+    counter-reset: toc;
+    padding-left: 2em;
+    margin: 0;
+}
+#toc ol li::before {
+    counter-increment: toc;
+    content: counters(toc, "-");
+    display: inline;
+    padding-right: .5em;
+    margin-left: -2em;
+}

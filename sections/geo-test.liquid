@@ -1,0 +1,282 @@
+<div id="store-locator-demo-{{ section.id }}" class="sl-demo">
+  <div class="sl-demo__head">
+    <h2 class="sl-demo__title">近くの店舗（テスト）</h2>
+    <p class="sl-demo__desc">現在地から半径2km以内の店舗を表示します（3店舗の直打ちデータ）。</p>
+  </div>
+
+  <div class="sl-demo__controls">
+    <button type="button" class="sl-demo__btn" data-action="geo">
+      現在地から探す
+    </button>
+
+    <div class="sl-demo__or">または</div>
+
+    <div class="sl-demo__manual">
+      <input type="text" class="sl-demo__input" placeholder="例）渋谷駅 / 〒150-0002 / 渋谷区渋谷…" data-manual-address>
+      <button type="button" class="sl-demo__btn sl-demo__btn--sub" data-action="geocode">
+        住所から探す
+      </button>
+      <p class="sl-demo__note">
+        ※ 住所検索はGoogle Mapsを使わない簡易版として、ブラウザ標準のジオコーディングは使えないため、
+        このデモでは「住所→緯度経度変換」は簡易的に未実装です（後でGoogle/Mapboxで実装可能）。
+        位置情報が使えない場合は、下の「テスト用：座標入力」で動作確認できます。
+      </p>
+    </div>
+  </div>
+
+  <details class="sl-demo__debug">
+    <summary>テスト用：座標入力（位置情報がNGな時の動作確認）</summary>
+    <div class="sl-demo__debug-inner">
+      <label class="sl-demo__label">
+        緯度:
+        <input type="number" step="0.000001" class="sl-demo__input" data-lat value="35.658034">
+      </label>
+      <label class="sl-demo__label">
+        経度:
+        <input type="number" step="0.000001" class="sl-demo__input" data-lng value="139.701636">
+      </label>
+      <button type="button" class="sl-demo__btn sl-demo__btn--sub" data-action="manual-coord">
+        この座標で検索
+      </button>
+      <p class="sl-demo__note">↑ 初期値は渋谷付近です（2km以内に入る店舗が出る想定）。</p>
+    </div>
+  </details>
+
+  <div class="sl-demo__status" aria-live="polite"></div>
+
+  <div class="sl-demo__result">
+    <h3 class="sl-demo__subtitle">検索結果</h3>
+    <div class="sl-demo__meta" data-meta></div>
+    <ul class="sl-demo__list" data-list></ul>
+  </div>
+</div>
+
+<style>
+  .sl-demo{
+    border: 1px solid rgba(0,0,0,.12);
+    border-radius: 12px;
+    padding: 18px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .sl-demo__title{ margin:0 0 6px; font-size: 20px; }
+  .sl-demo__desc{ margin:0 0 16px; opacity:.8; }
+  .sl-demo__controls{
+    display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap;
+    padding: 12px;
+    border-radius: 10px;
+    background: rgba(0,0,0,.03);
+  }
+  .sl-demo__btn{
+    appearance:none; border:1px solid rgba(0,0,0,.2);
+    background:#fff; padding:10px 14px; border-radius:10px;
+    cursor:pointer; font-weight:600;
+  }
+  .sl-demo__btn:hover{ background: rgba(0,0,0,.04); }
+  .sl-demo__btn--sub{ font-weight:500; }
+  .sl-demo__or{ padding:10px 6px; opacity:.7; }
+  .sl-demo__manual{ flex: 1 1 420px; min-width: 260px; }
+  .sl-demo__input{
+    width: 100%;
+    border:1px solid rgba(0,0,0,.2);
+    border-radius:10px;
+    padding:10px 12px;
+    background:#fff;
+    margin: 0 0 8px;
+  }
+  .sl-demo__note{ margin:8px 0 0; font-size: 12px; opacity:.75; line-height:1.5; }
+  .sl-demo__status{ margin: 12px 0 0; font-size: 13px; opacity:.85; }
+  .sl-demo__result{ margin-top: 18px; }
+  .sl-demo__subtitle{ margin:0 0 8px; font-size: 16px; }
+  .sl-demo__meta{ font-size: 13px; opacity:.8; margin-bottom: 10px; }
+  .sl-demo__list{ list-style:none; padding:0; margin:0; display:grid; gap:10px; }
+  .sl-demo__item{
+    border:1px solid rgba(0,0,0,.12);
+    border-radius:12px;
+    padding:12px;
+  }
+  .sl-demo__item h4{ margin:0 0 6px; font-size: 15px; }
+  .sl-demo__item p{ margin:0; font-size: 13px; opacity:.85; }
+  .sl-demo__badge{
+    display:inline-block;
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border:1px solid rgba(0,0,0,.2);
+    margin-left: 8px;
+    opacity:.9;
+  }
+  .sl-demo__debug{ margin-top: 12px; }
+  .sl-demo__debug-inner{ padding: 10px 0 0; display:grid; gap:8px; }
+  .sl-demo__label{ font-size: 13px; opacity:.9; }
+</style>
+
+<script>
+(() => {
+  const root = document.getElementById('store-locator-demo-{{ section.id }}');
+  if (!root) return;
+
+  // ===== 直打ちテスト店舗データ（3件） =====
+  // ※ここを書き換えるだけで店舗追加できます
+  const STORES = [
+    {
+      name: "テスト店舗A（渋谷）",
+      address: "東京都渋谷区渋谷2丁目",
+      lat: 35.658034,
+      lng: 139.701636,
+      tel: "03-0000-0001",
+      url: "/pages/store-a"
+    },
+    {
+      name: "テスト店舗B（表参道）",
+      address: "東京都港区北青山3丁目",
+      lat: 35.665498,
+      lng: 139.712327,
+      tel: "03-0000-0002",
+      url: "/pages/store-b"
+    },
+    {
+      name: "テスト店舗C（徳島）",
+      address: "徳島県徳島市南庄町４丁目57−５",
+      lat: 34.07232,
+      lng: 134.5074307,
+      tel: "03-0000-0003",
+      url: "/pages/store-c"
+    }
+  ];
+
+  const RADIUS_KM = 2;
+
+  const elStatus = root.querySelector('.sl-demo__status');
+  const elList   = root.querySelector('[data-list]');
+  const elMeta   = root.querySelector('[data-meta]');
+  const elLat    = root.querySelector('[data-lat]');
+  const elLng    = root.querySelector('[data-lng]');
+
+  function setStatus(msg) { elStatus.textContent = msg || ""; }
+
+  // Haversine distance (km)
+  function distanceKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat/2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLng/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  function renderResults(centerLat, centerLng) {
+    const results = STORES
+      .map(s => ({
+        ...s,
+        dist: distanceKm(centerLat, centerLng, s.lat, s.lng)
+      }))
+      .filter(s => s.dist <= RADIUS_KM)
+      .sort((a, b) => a.dist - b.dist);
+
+    elList.innerHTML = "";
+    elMeta.textContent = `半径${RADIUS_KM}km以内：${results.length}件（全${STORES.length}件中）`;
+
+    if (results.length === 0) {
+      elList.innerHTML = `<li class="sl-demo__item"><p>近く（${RADIUS_KM}km以内）に該当店舗がありません。</p></li>`;
+      return;
+    }
+
+    results.forEach(s => {
+      const li = document.createElement('li');
+      li.className = 'sl-demo__item';
+      li.innerHTML = `
+        <h4>
+          <a href="${s.url}" style="text-decoration:none;">${escapeHtml(s.name)}</a>
+          <span class="sl-demo__badge">${s.dist.toFixed(2)} km</span>
+        </h4>
+        <p>${escapeHtml(s.address)}</p>
+        ${s.tel ? `<p>TEL: ${escapeHtml(s.tel)}</p>` : ``}
+      `;
+      elList.appendChild(li);
+    });
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  async function getCurrentPosition(options = {}) {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error("このブラウザは位置情報に対応していません。"));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+        ...options
+      });
+    });
+  }
+
+  root.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action');
+
+    if (action === 'geo') {
+      setStatus("現在地を取得中です…（許可ダイアログが出たら許可してください）");
+      try {
+        const pos = await getCurrentPosition();
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setStatus(`現在地取得OK（lat: ${lat.toFixed(6)}, lng: ${lng.toFixed(6)}）→ 検索中…`);
+        renderResults(lat, lng);
+        setStatus(`検索完了（現在地ベース）`);
+      } catch (err) {
+        setStatus(`現在地が取得できませんでした：${err.message || err}`);
+      }
+    }
+
+    if (action === 'manual-coord') {
+      const lat = parseFloat(elLat?.value);
+      const lng = parseFloat(elLng?.value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        setStatus("緯度・経度が不正です。");
+        return;
+      }
+      setStatus(`テスト座標で検索（lat: ${lat.toFixed(6)}, lng: ${lng.toFixed(6)}）`);
+      renderResults(lat, lng);
+      setStatus("検索完了（テスト座標ベース）");
+    }
+
+    if (action === 'geocode') {
+      // このデモでは未実装（後でGoogle/Mapbox等で実装可能）
+      setStatus("このデモでは住所→緯度経度の変換は未実装です。下の『テスト用：座標入力』で動作確認してください。");
+    }
+  });
+
+  // 初期表示（何も検索してない状態）
+  elMeta.textContent = `半径${RADIUS_KM}km以内の店舗を表示します（まずは「現在地から探す」）。`;
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Store locator テスト",
+  "settings": [
+
+  ],
+  "presets": [
+    {
+      "name": "tStore locator テスト"
+    }
+  ]
+}
+{% endschema %}

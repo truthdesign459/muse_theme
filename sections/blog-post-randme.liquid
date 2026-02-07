@@ -1,0 +1,114 @@
+{% comment %}
+  Blog posts random 3 (Swiper)
+{% endcomment %}
+
+{%- liquid
+  assign target_blog = blogs[section.settings.blog]
+  assign count = 0
+  if target_blog
+    assign count = target_blog.articles_count | plus: 0
+  endif
+-%}
+
+<div class="blog-random-swiper blog-random-swiper--{{ section.id }}">
+  {% if target_blog and count > 0 %}
+    <div class="swiper js-blog-random-swiper-{{ section.id }}">
+      <div class="swiper-wrapper" id="blog-random-list-{{ section.id }}">
+        {% for article in target_blog.articles limit: 10 %}
+          <div class="swiper-slide js-blog-random-item-{{ section.id }}">
+            <article class="blog-random-item">
+              <a href="{{ article.url }}">
+                {% if article.image %}
+                  <img
+                    src="{{ article.image | image_url: width: 600 }}"
+                    alt="{{ article.title | escape }}"
+                    loading="lazy"
+                  >
+                {% endif %}
+                <h3>{{ article.title }}</h3>
+              </a>
+            </article>
+          </div>
+        {% endfor %}
+      </div>
+
+      {%- if section.settings.show_pagination -%}
+        <div class="swiper-pagination js-blog-random-pagination-{{ section.id }}"></div>
+      {%- endif -%}
+
+      {%- if section.settings.show_navigation -%}
+        <div class="swiper-button-prev js-blog-random-prev-{{ section.id }}"></div>
+        <div class="swiper-button-next js-blog-random-next-{{ section.id }}"></div>
+      {%- endif -%}
+    </div>
+  {% else %}
+    <p>ブログが未選択、または公開記事がありません。</p>
+    <p>記事数：{{ count }}</p>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const slideSelector = '.js-blog-random-item-{{ section.id }}';
+  const swiperEl = document.querySelector('.js-blog-random-swiper-{{ section.id }}');
+  if (!swiperEl) return;
+
+  const slides = Array.from(swiperEl.querySelectorAll(slideSelector));
+  if (slides.length === 0) return;
+
+  // Shuffle (Fisher–Yates)
+  for (let i = slides.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    slides[i].parentNode.insertBefore(slides[j], slides[i]);
+    // 上のinsertBeforeで入れ替えになるので、配列も同期
+    [slides[i], slides[j]] = [slides[j], slides[i]];
+  }
+
+  // Keep only 3
+  slides.forEach((slide, index) => {
+    if (index >=  6) slide.remove();
+  });
+
+  // Swiper init（テーマにSwiperが載ってる前提）
+  if (typeof Swiper === 'undefined') {
+    console.warn('Swiperが読み込まれていません');
+    return;
+  }
+
+  new Swiper(swiperEl, {
+    loop: false,
+    slidesPerView: 1.2,
+    spaceBetween: 16,
+    centeredSlides: false,
+    watchOverflow: true,
+    pagination: {{ section.settings.show_pagination | json }} ? {
+      el: '.js-blog-random-pagination-{{ section.id }}',
+      clickable: true
+    } : undefined,
+    navigation: {{ section.settings.show_navigation | json }} ? {
+      nextEl: '.js-blog-random-next-{{ section.id }}',
+      prevEl: '.js-blog-random-prev-{{ section.id }}'
+    } : undefined,
+    breakpoints: {
+      750: {
+        slidesPerView: 3,
+        spaceBetween: 24
+      }
+    }
+  });
+});
+</script>
+
+{% schema %}
+{
+  "name": "ブログ記事ランダム表示（Swiper/3件）",
+  "settings": [
+    { "type": "blog", "id": "blog", "label": "対象ブログ" },
+    { "type": "checkbox", "id": "show_pagination", "label": "ページネーション表示", "default": true },
+    { "type": "checkbox", "id": "show_navigation", "label": "前後ボタン表示", "default": false }
+  ],
+  "presets": [
+    { "name": "ブログ記事ランダム（Swiper/3件）" }
+  ]
+}
+{% endschema %}
