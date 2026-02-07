@@ -1,0 +1,255 @@
+<section class="store-locator" data-store-locator>
+  <div class="page-width">
+    <h1 class="h2">店舗検索</h1>
+
+    <div class="sl-controls">
+      <label>
+        商品
+        <select id="slProduct">
+          <option value="all">すべて</option>
+          <option value="p1">フィニッシュ ウルトラタブレット</option>
+          <option value="p2">ミューズ ボディ</option>
+          <option value="p3">ミューズ 洗濯槽洗剤</option>
+        </select>
+      </label>
+
+      <label>
+        都道府県
+        <select id="slPref">
+          <option value="">選択してください</option>
+        </select>
+      </label>
+
+      <label>
+        市区町村
+        <select id="slCity" disabled>
+          <option value="">都道府県を選択してください</option>
+        </select>
+      </label>
+
+      <button type="button" id="slSearchBtn">絞り込む</button>
+      <button type="button" id="slNearBtn">現在地から5km</button>
+    </div>
+
+    <div class="sl-meta">
+      <div id="slStatus"></div>
+    </div>
+
+    <div id="slResults" class="sl-results"></div>
+
+    <div class="sl-more">
+      <button type="button" id="slMoreBtn" style="display:none;">もっと見る</button>
+    </div>
+  </div>
+</section>
+
+<style>
+  .sl-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:16px 0;}
+  .sl-controls label{display:flex;flex-direction:column;gap:6px;min-width:220px}
+  .sl-controls select{padding:10px}
+  .sl-controls button{padding:10px 14px}
+  .sl-results{display:grid;grid-template-columns:repeat(1,minmax(0,1fr));gap:12px;margin-top:16px}
+  @media(min-width: 750px){.sl-results{grid-template-columns:repeat(2,minmax(0,1fr));}}
+  .sl-card{border:1px solid rgba(0,0,0,.12);padding:14px;border-radius:10px}
+  .sl-name{font-weight:700;margin-bottom:6px}
+  .sl-addr{opacity:.9}
+  .sl-tags{margin-top:8px;font-size:12px;opacity:.75}
+  .sl-distance{margin-top:8px;font-size:12px;opacity:.85}
+  .sl-meta{margin-top:8px;opacity:.85}
+</style>
+
+<script>
+(() => {
+  const BASE = "https://truthdesign459.github.io/muse";
+
+  const $product = document.getElementById("slProduct");
+  const $pref = document.getElementById("slPref");
+  const $city = document.getElementById("slCity");
+  const $searchBtn = document.getElementById("slSearchBtn");
+  const $nearBtn = document.getElementById("slNearBtn");
+  const $status = document.getElementById("slStatus");
+  const $results = document.getElementById("slResults");
+  const $moreBtn = document.getElementById("slMoreBtn");
+
+  const PAGE_SIZE = 50;
+  let currentList = [];
+  let rendered = 0;
+
+  const escapeHtml = (s) => (s ?? "").toString()
+    .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+
+  const setStatus = (msg) => { $status.textContent = msg || ""; };
+
+  async function fetchJson(path) {
+    const url = `${BASE}${path}`;
+    const res = await fetch(url, { cache: "force-cache" });
+    if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${url}`);
+    return await res.json();
+  }
+
+  function resetResults(list) {
+    currentList = list || [];
+    rendered = 0;
+    $results.innerHTML = "";
+    renderMore();
+  }
+
+  function renderMore() {
+    const slice = currentList.slice(rendered, rendered + PAGE_SIZE);
+    slice.forEach(store => {
+      const products = (store.products || []).join(", ");
+      const html = `
+        <div class="sl-card">
+          <div class="sl-name">${escapeHtml(store.name)}</div>
+          <div class="sl-addr">${escapeHtml(store.addr)}</div>
+          ${store.city ? `<div class="sl-tags">${escapeHtml(store.pref)} / ${escapeHtml(store.city)}</div>` : ""}
+          ${store.__distanceKm != null ? `<div class="sl-distance">現在地から約 ${store.__distanceKm.toFixed(2)} km</div>` : ""}
+          ${products ? `<div class="sl-tags">取扱い: ${escapeHtml(products)}</div>` : ""}
+        </div>
+      `;
+      $results.insertAdjacentHTML("beforeend", html);
+    });
+
+    rendered += slice.length;
+    $moreBtn.style.display = (rendered < currentList.length) ? "inline-block" : "none";
+    setStatus(`ヒット：${currentList.length}件（表示：${Math.min(rendered, currentList.length)}件）`);
+  }
+
+  $moreBtn.addEventListener("click", renderMore);
+
+  async function loadPrefs() {
+    setStatus("都道府県リスト読み込み中...");
+    const prefs = await fetchJson("/indexes/prefs.json");
+    $pref.innerHTML = `<option value="">選択してください</option>` + prefs
+      .map(p => `<option value="${p.prefCode}">${escapeHtml(p.pref)}</option>`)
+      .join("");
+    setStatus("");
+  }
+
+  async function loadCities(prefCode) {
+    if (!prefCode) {
+      $city.disabled = true;
+      $city.innerHTML = `<option value="">都道府県を選択してください</option>`;
+      return;
+    }
+    setStatus("市区町村リスト読み込み中...");
+    const data = await fetchJson(`/indexes/cities_${prefCode}.json`);
+    const cities = data.cities || [];
+    $city.disabled = false;
+    $city.innerHTML = `<option value="">すべて</option>` + cities
+      .map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
+      .join("");
+    setStatus("");
+  }
+
+  function filterByCity(list, city) {
+    if (!city) return list;
+    return list.filter(s => s.city === city);
+  }
+
+  async function searchByArea() {
+    const prefCode = $pref.value;
+    const product = $product.value;
+    const city = $city.value;
+
+    if (!prefCode) {
+      alert("都道府県を選択してください");
+      return;
+    }
+
+    setStatus("店舗データ読み込み中...");
+    const list = await fetchJson(`/stores/${product}/${prefCode}.json`);
+
+    const filtered = filterByCity(list, city);
+    setStatus("");
+    resetResults(filtered);
+  }
+
+  // 距離計算（km）
+  function haversineKm(lat1, lng1, lat2, lng2) {
+    const R = 6371;
+    const toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat/2)**2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+      Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  async function searchNearby() {
+    if (!navigator.geolocation) {
+      alert("このブラウザでは位置情報が使用できません。");
+      return;
+    }
+
+    setStatus("現在地を取得中...");
+    const pos = await new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 60000
+      });
+    }).catch(err => {
+      setStatus("");
+      alert("現在地を取得できませんでした（許可されているか確認してください）");
+      throw err;
+    });
+
+    const myLat = pos.coords.latitude;
+    const myLng = pos.coords.longitude;
+
+    // 近い都道府県候補を bbox で絞る（1〜数県を想定）
+    setStatus("近い都道府県を判定中...");
+    const bbox = await fetchJson("/indexes/pref_bbox.json");
+    const candidates = bbox.filter(b =>
+      myLat >= (b.minLat - 0.3) && myLat <= (b.maxLat + 0.3) &&
+      myLng >= (b.minLng - 0.3) && myLng <= (b.maxLng + 0.3)
+    );
+
+    if (!candidates.length) {
+      setStatus("");
+      alert("近隣都道府県が特定できませんでした。都道府県検索をご利用ください。");
+      return;
+    }
+
+    const product = $product.value;
+
+    // 候補県だけデータ取得して、5kmで絞る
+    setStatus("近隣店舗を検索中...");
+    let merged = [];
+    for (const c of candidates) {
+      const list = await fetchJson(`/stores/${product}/${c.prefCode}.json`);
+      merged = merged.concat(list);
+    }
+
+    const within = merged
+      .filter(s => typeof s.lat === "number" && typeof s.lng === "number")
+      .map(s => {
+        const d = haversineKm(myLat, myLng, s.lat, s.lng);
+        return { ...s, __distanceKm: d };
+      })
+      .filter(s => s.__distanceKm <= 5.0)
+      .sort((a,b) => a.__distanceKm - b.__distanceKm);
+
+    setStatus("");
+    resetResults(within);
+  }
+
+  $pref.addEventListener("change", () => loadCities($pref.value));
+  $searchBtn.addEventListener("click", searchByArea);
+  $nearBtn.addEventListener("click", searchNearby);
+
+  // init
+  loadPrefs();
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Store Locator",
+  "settings": []
+}
+{% endschema %}
