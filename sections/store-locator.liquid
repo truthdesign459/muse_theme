@@ -231,7 +231,7 @@
         const d = haversineKm(myLat, myLng, s.lat, s.lng);
         return { ...s, __distanceKm: d };
       })
-      .filter(s => s.__distanceKm <= 100.0)
+      .filter(s => s.__distanceKm <= 5.0)
       .sort((a,b) => a.__distanceKm - b.__distanceKm);
 
     setStatus("");
